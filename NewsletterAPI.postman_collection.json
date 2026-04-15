@@ -1,0 +1,228 @@
+{
+  "info": {
+    "name": "Newsletter & Email Campaign Manager API",
+    "description": "Complete Postman collection. Run Register first — the token is saved automatically.\nThen Create Mailing List, Add Subscriber, Create Campaign, and Schedule Campaign in order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",      "value": "http://localhost:8080", "type": "string" },
+    { "key": "token",        "value": "", "type": "string" },
+    { "key": "listId",       "value": "", "type": "string" },
+    { "key": "subscriberId", "value": "", "type": "string" },
+    { "key": "campaignId",   "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('token', pm.response.json().token);",
+            "  console.log('Token saved:', pm.response.json().token.substring(0,20) + '...');",
+            "}"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"john_doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"secret123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api","auth","register"] }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 200) {",
+            "  pm.collectionVariables.set('token', pm.response.json().token);",
+            "  console.log('Token saved from login');",
+            "}"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"john_doe\",\n  \"password\": \"secret123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mailing Lists",
+      "item": [
+        {
+          "name": "Create Mailing List",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('listId', pm.response.json().id);",
+            "  console.log('listId:', pm.response.json().id);",
+            "}"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Weekly Newsletter\",\n  \"description\": \"Our weekly subscriber list\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/mailing-lists", "host": ["{{baseUrl}}"], "path": ["api","mailing-lists"] }
+          }
+        },
+        {
+          "name": "Get All Mailing Lists",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/mailing-lists", "host": ["{{baseUrl}}"], "path": ["api","mailing-lists"] }
+          }
+        },
+        {
+          "name": "Get Mailing List by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/mailing-lists/{{listId}}", "host": ["{{baseUrl}}"], "path": ["api","mailing-lists","{{listId}}"] }
+          }
+        },
+        {
+          "name": "Delete Mailing List",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/mailing-lists/{{listId}}", "host": ["{{baseUrl}}"], "path": ["api","mailing-lists","{{listId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscribers",
+      "item": [
+        {
+          "name": "Add Subscriber (Alice)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('subscriberId', pm.response.json().id);",
+            "  console.log('subscriberId:', pm.response.json().id);",
+            "}"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Alice Smith\",\n  \"email\": \"alice@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/mailing-lists/{{listId}}/subscribers", "host": ["{{baseUrl}}"], "path": ["api","mailing-lists","{{listId}}","subscribers"] }
+          }
+        },
+        {
+          "name": "Add Subscriber (Bob)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Bob Jones\",\n  \"email\": \"bob@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/mailing-lists/{{listId}}/subscribers", "host": ["{{baseUrl}}"], "path": ["api","mailing-lists","{{listId}}","subscribers"] }
+          }
+        },
+        {
+          "name": "Remove Subscriber",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/mailing-lists/{{listId}}/subscribers/{{subscriberId}}", "host": ["{{baseUrl}}"], "path": ["api","mailing-lists","{{listId}}","subscribers","{{subscriberId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campaigns",
+      "item": [
+        {
+          "name": "Create Campaign (DRAFT)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('campaignId', pm.response.json().id);",
+            "  console.log('campaignId:', pm.response.json().id);",
+            "}"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Summer Sale 2026\",\n  \"subject\": \"Huge discounts this summer!\",\n  \"content\": \"<h1>Summer Sale</h1><p>Up to 50% off on all items!</p>\",\n  \"mailingListId\": \"{{listId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/campaigns", "host": ["{{baseUrl}}"], "path": ["api","campaigns"] }
+          }
+        },
+        {
+          "name": "Get All Campaigns (paginated)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns?page=0&size=10",
+              "host": ["{{baseUrl}}"], "path": ["api","campaigns"],
+              "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "10" }]
+            }
+          }
+        },
+        {
+          "name": "Filter Campaigns by DRAFT",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns?status=DRAFT&page=0&size=10",
+              "host": ["{{baseUrl}}"], "path": ["api","campaigns"],
+              "query": [{ "key": "status", "value": "DRAFT" }, { "key": "page", "value": "0" }, { "key": "size", "value": "10" }]
+            }
+          }
+        },
+        {
+          "name": "Filter Campaigns by SCHEDULED",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns?status=SCHEDULED&page=0&size=10",
+              "host": ["{{baseUrl}}"], "path": ["api","campaigns"],
+              "query": [{ "key": "status", "value": "SCHEDULED" }, { "key": "page", "value": "0" }, { "key": "size", "value": "10" }]
+            }
+          }
+        },
+        {
+          "name": "Filter Campaigns by SENT",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns?status=SENT&page=0&size=10",
+              "host": ["{{baseUrl}}"], "path": ["api","campaigns"],
+              "query": [{ "key": "status", "value": "SENT" }, { "key": "page", "value": "0" }, { "key": "size", "value": "10" }]
+            }
+          }
+        },
+        {
+          "name": "Get Campaign by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/campaigns/{{campaignId}}", "host": ["{{baseUrl}}"], "path": ["api","campaigns","{{campaignId}}"] }
+          }
+        },
+        {
+          "name": "Update Campaign",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Summer Sale 2026 (Updated)\",\n  \"subject\": \"Even bigger deals inside!\",\n  \"content\": \"<h1>Updated Summer Sale</h1><p>More deals added!</p>\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/campaigns/{{campaignId}}", "host": ["{{baseUrl}}"], "path": ["api","campaigns","{{campaignId}}"] }
+          }
+        },
+        {
+          "name": "Schedule Campaign",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"scheduledAt\": \"2027-01-15T09:00:00\",\n  \"mailingListId\": \"{{listId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/campaigns/{{campaignId}}/schedule", "host": ["{{baseUrl}}"], "path": ["api","campaigns","{{campaignId}}","schedule"] }
+          }
+        },
+        {
+          "name": "Delete Campaign",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/campaigns/{{campaignId}}", "host": ["{{baseUrl}}"], "path": ["api","campaigns","{{campaignId}}"] }
+          }
+        }
+      ]
+    }
+  ]
+}

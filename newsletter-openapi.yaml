@@ -1,0 +1,848 @@
+openapi: 3.0.3
+info:
+  title: Newsletter & Email Campaign Manager API
+  description: |
+    Secure REST API for managing mailing lists, subscribers, and email campaigns with JWT authentication.
+
+    ## Authentication
+    All endpoints except `/api/auth/**` require a **Bearer JWT token**.
+
+    1. Register via `POST /api/auth/register`
+    2. Login via `POST /api/auth/login` to receive the token
+    3. Click **Authorize** and enter your token (without the "Bearer" prefix in Swagger UI)
+
+    ## Campaign Lifecycle
+    ```
+    DRAFT ──► SCHEDULED ──► SENT
+    ```
+    - New campaigns are always created as **DRAFT**
+    - Call `/schedule` with a future timestamp to move to **SCHEDULED**
+    - A background scheduler checks every 60 seconds and sends due campaigns, logging one line per subscriber and marking the campaign **SENT**
+    - **SENT** campaigns cannot be edited or deleted
+  version: 1.0.0
+  contact:
+    name: Newsletter API Support
+    email: admin@newsletter.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your JWT token (obtained from /api/auth/login)
+
+  schemas:
+
+    # ── Request Schemas ────────────────────────────────────────────────────────
+
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: john_doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          minLength: 6
+          example: secret123
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: john_doe
+        password:
+          type: string
+          example: secret123
+
+    CreateMailingListRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: Weekly Newsletter
+        description:
+          type: string
+          maxLength: 500
+          example: Our weekly subscriber list
+
+    AddSubscriberRequest:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: Alice Smith
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: alice@example.com
+
+    CreateCampaignRequest:
+      type: object
+      required: [name, subject, content]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          example: Summer Sale 2026
+        subject:
+          type: string
+          maxLength: 300
+          example: Huge discounts this summer!
+        content:
+          type: string
+          example: "<h1>Summer Sale</h1><p>Up to 50% off on all items!</p>"
+        mailingListId:
+          type: string
+          description: Optional — can be linked at creation or later via schedule
+          example: 64abc123def456
+
+    UpdateCampaignRequest:
+      type: object
+      description: All fields are optional — only provided fields are updated
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          example: Summer Sale 2026 (Updated)
+        subject:
+          type: string
+          maxLength: 300
+          example: Even bigger deals inside!
+        content:
+          type: string
+          example: "<h1>Updated Sale</h1><p>More deals added!</p>"
+        mailingListId:
+          type: string
+          example: 64abc123def456
+
+    ScheduleCampaignRequest:
+      type: object
+      required: [scheduledAt, mailingListId]
+      properties:
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Must be a future date/time (ISO 8601)
+          example: "2027-01-15T09:00:00"
+        mailingListId:
+          type: string
+          description: The mailing list to send to
+          example: 64abc123def456
+
+    # ── Response Schemas ───────────────────────────────────────────────────────
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9...
+        type:
+          type: string
+          example: Bearer
+        username:
+          type: string
+          example: john_doe
+        email:
+          type: string
+          example: john@example.com
+
+    MailingListSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64abc123def456
+        name:
+          type: string
+          example: Weekly Newsletter
+        description:
+          type: string
+          example: Our weekly subscriber list
+        subscriberCount:
+          type: integer
+          example: 42
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SubscriberResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID assigned to this subscriber within the list
+          example: a3f2c1d0-1234-5678-abcd-ef0123456789
+        name:
+          type: string
+          example: Alice Smith
+        email:
+          type: string
+          example: alice@example.com
+        subscribedAt:
+          type: string
+          format: date-time
+
+    MailingListDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64abc123def456
+        name:
+          type: string
+          example: Weekly Newsletter
+        description:
+          type: string
+          example: Our weekly subscriber list
+        subscriberCount:
+          type: integer
+          example: 2
+        subscribers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubscriberResponse'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CampaignResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64xyz789abc123
+        name:
+          type: string
+          example: Summer Sale 2026
+        subject:
+          type: string
+          example: Huge discounts this summer!
+        content:
+          type: string
+          example: "<h1>Summer Sale</h1><p>Up to 50% off!</p>"
+        status:
+          type: string
+          enum: [DRAFT, SCHEDULED, SENT, CANCELLED]
+          example: DRAFT
+        mailingListId:
+          type: string
+          example: 64abc123def456
+        mailingListName:
+          type: string
+          example: Weekly Newsletter
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CampaignPageResponse:
+      type: object
+      description: Spring Data paginated response
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignResponse'
+        totalElements:
+          type: integer
+          format: int64
+          example: 15
+        totalPages:
+          type: integer
+          example: 2
+        number:
+          type: integer
+          description: Current page (0-based)
+          example: 0
+        size:
+          type: integer
+          example: 10
+        first:
+          type: boolean
+          example: true
+        last:
+          type: boolean
+          example: false
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Operation completed successfully
+        success:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 404
+        error:
+          type: string
+          example: Not Found
+        message:
+          type: string
+          example: Mailing list not found with id: abc123
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: Validation Failed
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            name: "Mailing list name is required"
+            email: "Email must be valid"
+        timestamp:
+          type: string
+          format: date-time
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Authentication ────────────────────────────────────────────────────────────
+
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      description: Creates a new user account and returns a JWT token immediately — no separate login required after registration.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              username: john_doe
+              email: john@example.com
+              password: secret123
+      responses:
+        '201':
+          description: User registered successfully — JWT token returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9...
+                type: Bearer
+                username: john_doe
+                email: john@example.com
+        '400':
+          description: Validation error (invalid email, password too short, missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '409':
+          description: Username or email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login and receive a JWT token
+      description: Authenticates credentials and returns a JWT token valid for 24 hours.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: john_doe
+              password: secret123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid username or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Mailing Lists ─────────────────────────────────────────────────────────────
+
+  /api/mailing-lists:
+    post:
+      tags: [Mailing Lists]
+      summary: Create a new mailing list
+      description: Creates a new empty mailing list owned by the authenticated user. List names must be unique per user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMailingListRequest'
+            example:
+              name: Weekly Newsletter
+              description: Our weekly subscriber digest
+      responses:
+        '201':
+          description: Mailing list created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailingListSummary'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Unauthorized — token missing or invalid
+        '409':
+          description: A mailing list with this name already exists for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [Mailing Lists]
+      summary: Get all mailing lists for the authenticated user
+      description: Returns a summary list (without subscriber details) of all mailing lists owned by the authenticated user.
+      responses:
+        '200':
+          description: List of mailing list summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MailingListSummary'
+        '401':
+          description: Unauthorized
+
+  /api/mailing-lists/{id}:
+    get:
+      tags: [Mailing Lists]
+      summary: Get mailing list details with all subscribers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 64abc123def456
+      responses:
+        '200':
+          description: Mailing list with subscriber array
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailingListDetail'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Mailing list not found (or belongs to another user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Mailing Lists]
+      summary: Delete a mailing list
+      description: Permanently deletes the mailing list and all its subscribers. Campaigns linked to this list are not deleted but lose the mailing list reference.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Mailing list deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Mailing list not found
+
+  /api/mailing-lists/{id}/subscribers:
+    post:
+      tags: [Mailing Lists]
+      summary: Add a subscriber to the mailing list
+      description: |
+        Adds a new subscriber to the list. The same email address cannot appear more than once in the same list — attempting to add a duplicate email returns **409 Conflict**.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 64abc123def456
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddSubscriberRequest'
+            example:
+              name: Alice Smith
+              email: alice@example.com
+      responses:
+        '201':
+          description: Subscriber added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriberResponse'
+        '400':
+          description: Invalid email format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Mailing list not found
+        '409':
+          description: Email already subscribed to this list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/mailing-lists/{id}/subscribers/{subscriberId}:
+    delete:
+      tags: [Mailing Lists]
+      summary: Remove a subscriber from the mailing list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Mailing list ID
+          schema:
+            type: string
+          example: 64abc123def456
+        - name: subscriberId
+          in: path
+          required: true
+          description: Subscriber UUID (returned when subscriber was added)
+          schema:
+            type: string
+          example: a3f2c1d0-1234-5678-abcd-ef0123456789
+      responses:
+        '200':
+          description: Subscriber removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Mailing list or subscriber not found
+
+  # ── Campaigns ─────────────────────────────────────────────────────────────────
+
+  /api/campaigns:
+    post:
+      tags: [Campaigns]
+      summary: Create a new campaign (saved as DRAFT)
+      description: |
+        Creates a campaign with status **DRAFT**. A mailing list can be linked now or later when scheduling.
+        The campaign must be explicitly scheduled before it will be sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCampaignRequest'
+            example:
+              name: Summer Sale 2026
+              subject: Huge discounts this summer!
+              content: "<h1>Summer Sale</h1><p>Up to 50% off on all items!</p>"
+              mailingListId: 64abc123def456
+      responses:
+        '201':
+          description: Campaign created as DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Unauthorized
+
+    get:
+      tags: [Campaigns]
+      summary: List all campaigns with pagination and optional status filter
+      description: Returns a paginated list of the authenticated user's campaigns. Newest campaigns appear first.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by campaign status
+          schema:
+            type: string
+            enum: [DRAFT, SCHEDULED, SENT, CANCELLED]
+          example: DRAFT
+        - name: page
+          in: query
+          description: Page number (0-based)
+          schema:
+            type: integer
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 10
+          example: 10
+      responses:
+        '200':
+          description: Paginated campaign list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignPageResponse'
+        '401':
+          description: Unauthorized
+
+  /api/campaigns/{id}:
+    get:
+      tags: [Campaigns]
+      summary: Get a campaign by ID
+      description: Returns the full campaign details. Only returns campaigns belonging to the authenticated user.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 64xyz789abc123
+      responses:
+        '200':
+          description: Campaign found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Campaign not found (or belongs to another user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Campaigns]
+      summary: Update a campaign
+      description: |
+        Updates campaign fields. All fields are optional — only provided fields are changed.
+
+        **Restrictions:**
+        - Only **DRAFT** and **SCHEDULED** campaigns can be edited
+        - **SENT** campaigns cannot be modified — returns `400 Bad Request`
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCampaignRequest'
+            example:
+              name: Summer Sale 2026 (Updated)
+              subject: Even bigger deals inside!
+      responses:
+        '200':
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          description: Cannot edit a SENT campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Campaign not found
+
+    delete:
+      tags: [Campaigns]
+      summary: Delete a campaign
+      description: |
+        Permanently deletes a campaign.
+
+        **Restrictions:**
+        - Only **DRAFT** and **SCHEDULED** campaigns can be deleted
+        - **SENT** campaigns cannot be deleted — returns `400 Bad Request`
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Cannot delete a SENT campaign
+        '401':
+          description: Unauthorized
+        '404':
+          description: Campaign not found
+
+  /api/campaigns/{id}/schedule:
+    post:
+      tags: [Campaigns]
+      summary: Schedule a campaign for a future date/time
+      description: |
+        Schedules the campaign for sending at the specified future time.
+        - Sets the campaign status to **SCHEDULED**
+        - Links the campaign to the specified mailing list
+        - The `scheduledAt` time **must be in the future** — past timestamps return `400 Bad Request`
+        - The background scheduler checks every 60 seconds and automatically sends due campaigns
+
+        **When a campaign sends:**
+        1. A log line is written for each subscriber: `[EMAIL SENT] To: Name <email> | Subject: ... | Campaign: ...`
+        2. Campaign status changes to **SENT**
+        3. `sentAt` timestamp is recorded
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 64xyz789abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleCampaignRequest'
+            example:
+              scheduledAt: "2027-01-15T09:00:00"
+              mailingListId: 64abc123def456
+      responses:
+        '200':
+          description: Campaign scheduled successfully — status is now SCHEDULED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+              example:
+                id: 64xyz789abc123
+                name: Summer Sale 2026
+                subject: Huge discounts this summer!
+                status: SCHEDULED
+                mailingListId: 64abc123def456
+                mailingListName: Weekly Newsletter
+                scheduledAt: "2027-01-15T09:00:00"
+                sentAt: null
+        '400':
+          description: |
+            Bad request — possible causes:
+            - `scheduledAt` is in the past
+            - Campaign has already been sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Campaign or mailing list not found
+
+tags:
+  - name: Authentication
+    description: Register a new user and login to obtain a JWT token
+  - name: Mailing Lists
+    description: Create and manage mailing lists and their subscribers
+  - name: Campaigns
+    description: Create, edit, schedule, and track email campaigns (sending simulated via logs)
