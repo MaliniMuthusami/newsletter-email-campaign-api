@@ -1,0 +1,4 @@
+com\newsletter\service\CampaignServiceTest.class
+com\newsletter\controller\AuthControllerTest.class
+com\newsletter\controller\CampaignControllerTest.class
+com\newsletter\controller\MailingListControllerTest.class
